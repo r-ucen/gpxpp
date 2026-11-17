@@ -1,7 +1,8 @@
 #pragma once
 
 #include "gpxpp/parser.h"
-#include "types/document.h"
-#include "types/track.h"
-#include "types/track_point.h"
-#include "types/track_segment.h"
+#include "gpxpp/types/document.h"
+#include "gpxpp/types/track.h"
+#include "gpxpp/types/track_point.h"
+#include "gpxpp/types/track_segment.h"
+#include "gpxpp/types/coordiantes.h"
