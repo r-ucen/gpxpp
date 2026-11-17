@@ -5,6 +5,6 @@
 
 namespace gpxpp {
     struct Document {
-        std::vector<Track> m_tracks;
+        std::vector<Track> tracks;
     };
 }

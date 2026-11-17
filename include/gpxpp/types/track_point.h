@@ -6,9 +6,9 @@
 
 namespace gpxpp {
     struct TrackPoint {
-        Latitude m_lat {};
-        Longitude m_lon {};
-        std::optional<double> m_elevation {};
-        std::optional<std::chrono::sys_seconds> m_time {};
+        Latitude lat {};
+        Longitude lon {};
+        std::optional<double> elevation {};
+        std::optional<std::chrono::sys_seconds> time {};
     };
 }

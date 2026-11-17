@@ -7,9 +7,9 @@
 
 namespace gpxpp {
     struct Track {
-        std::optional<std::string> m_name {};
-        std::optional<std::string> m_description {};
-        std::optional<std::string> m_type {};
-        std::vector<TrackSegment> m_segments {};
+        std::optional<std::string> name {};
+        std::optional<std::string> description {};
+        std::optional<std::string> type {};
+        std::vector<TrackSegment> segments {};
     };
 }

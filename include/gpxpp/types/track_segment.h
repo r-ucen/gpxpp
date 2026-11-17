@@ -5,6 +5,6 @@
 
 namespace gpxpp {
     struct TrackSegment {
-        std::vector<TrackPoint> m_points {};
+        std::vector<TrackPoint> points {};
     };
 }
