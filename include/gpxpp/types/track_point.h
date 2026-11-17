@@ -2,7 +2,7 @@
 #include <chrono>
 #include <optional>
 
-#include "gpxpp/types/coordiantes.h"
+#include "gpxpp/types/coordinates.h"
 
 namespace gpxpp {
     struct TrackPoint {
