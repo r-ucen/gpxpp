@@ -6,12 +6,13 @@
 #include <optional>
 #include <string_view>
 #include <chrono>
+#include <filesystem>
 
 #include "gpxpp/types/document.h"
 
 namespace gpxpp {
 
-    std::optional<Document> loadDocument(const std::string &path) {
+    std::optional<Document> loadDocument(const std::filesystem::path& path) {
         pugi::xml_document xmlDocument;
 
         if (!xmlDocument.load_file(path.c_str())) { return {}; }
