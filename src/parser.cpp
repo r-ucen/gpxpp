@@ -24,17 +24,17 @@ namespace gpxpp {
 
         Document document;
 
-        for (pugi::xml_node trkNode : gpxNode.child("trk")) {
+        for (pugi::xml_node trkNode : gpxNode.children("trk")) {
             Track track;
 
-            if (pugi::xml_node trkName = trkNode.child("name")) {track.name = trkName.text().as_string();}
-            if (pugi::xml_node trkDes = trkNode.child("description")) {track.description = trkDes.text().as_string();}
-            if (pugi::xml_node trkType = trkNode.child("type")) {track.type = trkType.text().as_string();}
+            if (pugi::xml_node trkName = trkNode.child("name")) { track.name = trkName.text().as_string(); }
+            if (pugi::xml_node trkDes = trkNode.child("desc")) { track.description = trkDes.text().as_string(); }
+            if (pugi::xml_node trkType = trkNode.child("type")) { track.type = trkType.text().as_string(); }
 
-            for (pugi::xml_node trksegNode : trkNode.child("trkseg")) {
+            for (pugi::xml_node trksegNode : trkNode.children("trkseg")) {
                 TrackSegment trackSegment;
 
-                for (pugi::xml_node trkptNode : trksegNode.child("trkpt")) {
+                for (pugi::xml_node trkptNode : trksegNode.children("trkpt")) {
                     TrackPoint trackPoint {
                         .lat = trkptNode.attribute("lat").as_double(),
                         .lon = trkptNode.attribute("lon").as_double()
