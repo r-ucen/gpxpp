@@ -6,3 +6,5 @@ function(gpxpp_add_example name)
 endfunction()
 
 gpxpp_add_example(can_load_gpx_file)
+gpxpp_add_example(all_points_from_document)
+gpxpp_add_example(all_segments_from_document)
