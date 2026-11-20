@@ -18,6 +18,7 @@ FetchContent_MakeAvailable(pugixml)
 # Create gpxpp library target and an alias for it in the gpxpp::gpxpp format
 add_library(gpxpp
         src/parser.cpp
+        src/algorithms.cpp
 )
 
 add_library(gpxpp::gpxpp ALIAS gpxpp)
