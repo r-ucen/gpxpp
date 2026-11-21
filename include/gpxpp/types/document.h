@@ -8,16 +8,6 @@ namespace gpxpp {
     struct Document {
         std::vector<Track> tracks;
 
-        auto allPoints() {
-            return tracks | std::views::transform([](Track& track) { return track.allPoints(); })
-            | std::views::join;
-        }
-
-        [[nodiscard]] auto allPoints() const {
-            return tracks | std::views::transform([](const Track& track) { return track.allPoints(); })
-            | std::views::join;
-        }
-
         auto allSegments() {
             return tracks | std::views::transform([](Track& track) -> std::vector<TrackSegment>& { return track.segments; })
             | std::views::join;
@@ -25,6 +15,16 @@ namespace gpxpp {
 
         [[nodiscard]] auto allSegments() const {
             return tracks | std::views::transform([](const Track& track) -> const std::vector<TrackSegment>& { return track.segments; })
+            | std::views::join;
+        }
+
+        auto allPoints() {
+            return allSegments() | std::views::transform([](const TrackSegment& segment) -> const std::vector<TrackPoint>& { return segment.points; })
+            | std::views::join;
+        }
+
+        [[nodiscard]] auto allPoints() const {
+            return allSegments() | std::views::transform([](const TrackSegment& segment) -> const std::vector<TrackPoint>& { return segment.points; })
             | std::views::join;
         }
     };
