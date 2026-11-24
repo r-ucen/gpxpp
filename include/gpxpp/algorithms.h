@@ -1,6 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <ranges>
 #include <concepts>
+#include <numeric>
 
 #include "gpxpp/types/track_point.h"
 #include "gpxpp/types/track_segment.h"
@@ -106,6 +108,17 @@ namespace gpxpp {
     template <typename T> requires DistanceCalculableRange<T>
     double totalDistance(T&& elements);
 
+    /**
+     * Smooths the elevation of TrackPoints in a given range using centered moving average.
+     *
+     * @tparam T A range of TrackPoints to be smoothed by the elevation
+     * @param points The points to be smoothed by the elevation
+     * @param windowSize The size of the moving average window
+     * @return A range view of TrackPoints with smoothed elevation data
+     */
+    template <typename T> requires TrackPointRange<T>
+    auto movingAverageElevation(T&& points, int windowSize = 5);
+
     // DEFINITIONS -----------------------------------------------------------------------------------------------------
 
     template <typename T> requires TrackPointRange<T>
@@ -140,5 +153,52 @@ namespace gpxpp {
         }
 
         return result;
+    }
+
+    template <typename T> requires TrackPointRange<T>
+    auto movingAverageElevation(T&& points, int windowSize) {
+        // When when returning some kind of a view, std::forward needs to be called on the points,
+        // it is important when calling the movingAverage function with an rvalue
+
+        // points itself is an lvalue
+        // the && in T&& points is a forwarding reference in a function template, it binds to both lvalues and rvalues
+
+        // reference collapsing:
+        // U& + && collapses to U&
+        // U + && stays U&&
+
+        // if caller passes lvalue of U, T is deduced as U&, collapsing makes it U&, type of points is U&
+        // if caller passes rvalue of U, T is deduced as U, collapsing makes it stay U&&, type of points is U&&
+
+        // std::forward just casts points via the above two rules using reference collapsing (std::forward<T>(x) == static_cast<T&&>(x))
+
+        // Lets say we call movingAverage like this:
+        // auto result = movingAverage(getData());
+
+        // getData() returns a temporary vector
+
+        // owning_view is a view that has unique ownership of a range. It is move-only and stores that range within it.
+        // ref_view is a view of the elements of some other range. It wraps a reference to that range.
+
+        // With std::forward, the temporary vector gets moved into an owning_view inside the returned pipeline
+        // without std::forward, we are working with a ref_view pointing at the temporary vector, the temporary dies
+        // at the end of auto result = movingAverage(getData()); and we get a dangling result
+
+        return std::forward<T>(points)
+            | std::views::filter([](const auto& point){ return point.elevation.has_value(); })
+            | std::views::slide(windowSize)
+            | std::views::transform([windowSize](auto window) {
+
+                const auto sum {
+                    // Cannot use std::accumulate because the begin and end iterators of win are of a different type
+                    std::ranges::fold_left(window, 0.0, [](double sum, const TrackPoint& point) {
+                        return sum + point.elevation.value();
+                    })
+                };
+
+                auto smoothedPointByElevation { *std::ranges::next(std::ranges::begin(window), windowSize / 2) };
+                smoothedPointByElevation.elevation = sum / static_cast<double>(windowSize);
+                return smoothedPointByElevation;
+            });
     }
 }
