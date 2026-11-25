@@ -22,6 +22,14 @@ namespace gpxpp {
         int movingAverageWindowSize { 5 };
     };
 
+    /**
+     * A struct holding elevation gain and loss data
+     */
+    struct Elevation {
+        double gain { 0.0 };
+        double loss { 0.0 };
+    };
+
     // FUNCTIONS -------------------------------------------------------------------------------------------------------
 
     /**
@@ -91,6 +99,31 @@ namespace gpxpp {
      */
     inline double elevationGain(const TrackSegment& segment, ElevationOptions options = {});
 
+    /**
+     *  Calculates the total elevation loss of all tracks in the document
+     *
+     * @param document The document containing tracks
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation loss of all tracks in the document in meters
+     */
+    inline double elevationLoss(const Document& document, ElevationOptions options = {});
+    /**
+     *  Calculates the total elevation loss of all segments in the track
+     *
+     * @param track The track used to calculate the elevation loss
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation loss of all segments in the given track in meters
+     */
+    inline double elevationLoss(const Track& track, ElevationOptions options = {});
+    /**
+     * Calculates the total elevation loss of all points in the given segment
+     *
+     * @param segment The segment containing points for elevation loss calculation
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation loss of the points in the segment in meters
+     */
+    inline double elevationLoss(const TrackSegment& segment, ElevationOptions options = {});
+
     // CONCEPTS --------------------------------------------------------------------------------------------------------
 
     /// Requires T to be an input range and the values in that range to be of type TrackPoint
@@ -133,6 +166,21 @@ namespace gpxpp {
     concept ElevationGainCalculableRange = OtherThanTrackPointRange<T>
     && ElevationGainCalculableElementOfRange<T>;
 
+    /// Requires an element of a range to be so when passed into the elevationLoss function,
+    /// the function successfully returns a double value
+    template <typename T>
+    concept ElevationLossCalculableElementOfRange = requires
+    (std::ranges::range_reference_t<T> element, ElevationOptions options) {
+        { elevationLoss(element, options) } -> std::convertible_to<double>;
+    };
+
+    /// Requires T to be an input range of any values other than TrackPoint
+    /// and requires this input range elements to be so when passed into the elevationLoss function,
+    /// the function successfully returns a double value
+    template <typename T>
+    concept ElevationLossCalculableRange = OtherThanTrackPointRange<T>
+    && ElevationLossCalculableElementOfRange<T>;
+
     // TEMPLATE FUNCTIONS ----------------------------------------------------------------------------------------------
 
     /**
@@ -173,6 +221,17 @@ namespace gpxpp {
     auto movingAverageElevation(T&& points, int windowSize = 5);
 
     /**
+     * Calculates the total elevation gain and loss of the given range of TrackPoints
+     *
+     * @tparam T A range of TrackPoints to calculate elevation data from
+     * @param points The points used in the elevation calculation
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation gain and loss of the points in meters
+     */
+    template<typename T> requires TrackPointRange<T>
+    Elevation elevation(T&& points, ElevationOptions options = {});
+
+    /**
      * Calculates the total elevation gain of the given range of TrackPoints
      *
      * @tparam T A range of TrackPoints to calculate elevation gain from
@@ -193,6 +252,28 @@ namespace gpxpp {
      */
     template <typename T> requires ElevationGainCalculableRange<T>
     double elevationGain(T&& elements, ElevationOptions options = {});
+
+    /**
+     * Calculates the total elevation loss of the given range of TrackPoints
+     *
+     * @tparam T A range of TrackPoints to calculate elevation loss from
+     * @param points The points used in the elevation loss calculation
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation loss of the points in meters
+     */
+    template <typename T> requires TrackPointRange<T>
+    auto elevationLoss(T&& points, ElevationOptions options = {});
+
+    /**
+     * Calculates the total elevation loss of the given elements
+     *
+     * @tparam T A range of elements that have an elevationLoss() of their own such as TrackSegment, Track; the elements must satisfy the ElevationGainCalculableRange concept
+     * @param elements The elements to sum up their elevation loss
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation loss of the given elements in meters
+     */
+    template <typename T> requires ElevationLossCalculableRange<T>
+    double elevationLoss(T&& elements, ElevationOptions options = {});
 
     // DEFINITIONS -----------------------------------------------------------------------------------------------------
 
@@ -278,17 +359,17 @@ namespace gpxpp {
     }
 
     template<typename T> requires TrackPointRange<T>
-    auto elevationGain(T&& points, const ElevationOptions options) {
+    Elevation elevation(T&& points, const ElevationOptions options) {
         auto validPoints = std::forward<T>(points)
             | std::views::filter([](const TrackPoint& point) { return point.elevation.has_value(); });
 
-        auto calculateElevationGain = [threshold = options.threshold](auto&& range) {
+        auto calculateElevationGain = [threshold = options.threshold](auto&& range) -> Elevation {
             auto it { std::ranges::begin(range) };
             auto end { std::ranges::end(range) };
 
-            if (it == end) { return 0.0; }
+            if (it == end) { return {}; }
 
-            double totalGain { 0.0 };
+            Elevation totalElevation {};
             double anchor { (*it).elevation.value() };
             ++it;
 
@@ -298,13 +379,14 @@ namespace gpxpp {
 
                 if (difference >= threshold) {
                     anchor = currentElevation;
-                    totalGain += difference;
+                    totalElevation.gain += difference;
                 } else if (difference <= -threshold) {
                     anchor = currentElevation;
+                    totalElevation.loss += -difference;
                 }
             }
 
-            return totalGain;
+            return totalElevation;
         };
 
         if (options.movingAverageWindowSize <= 1) { return calculateElevationGain(validPoints); }
@@ -319,6 +401,11 @@ namespace gpxpp {
         if (count < options.movingAverageWindowSize) { return calculateElevationGain(validPoints); }
 
         return calculateElevationGain(movingAverageElevation(validPoints, options.movingAverageWindowSize));
+    }
+
+    template<typename T> requires TrackPointRange<T>
+    auto elevationGain(T&& points, const ElevationOptions options) {
+        return elevation(std::forward<T>(points), options).gain;
     }
 
     inline double elevationGain(const Document& document, const ElevationOptions options) {
@@ -336,6 +423,31 @@ namespace gpxpp {
         double result { 0.0 };
         for (const auto& element : elements) {
             result += elevationGain(element, options);
+        }
+
+        return result;
+    }
+
+    template<typename T> requires TrackPointRange<T>
+    auto elevationLoss(T&& points, const ElevationOptions options) {
+        return elevation(std::forward<T>(points), options).loss;
+    }
+
+    inline double elevationLoss(const Document& document, const ElevationOptions options) {
+        return elevationLoss(document.tracks, options);
+    }
+    inline double elevationLoss(const Track& track, const ElevationOptions options) {
+        return elevationLoss(track.segments, options);
+    }
+    inline double elevationLoss(const TrackSegment& segment, const ElevationOptions options) {
+        return elevationLoss(segment.points, options);
+    }
+
+    template <typename T> requires ElevationLossCalculableRange<T>
+    double elevationLoss(T&& elements, const ElevationOptions options) {
+        double result { 0.0 };
+        for (const auto& element : elements) {
+            result += elevationLoss(element, options);
         }
 
         return result;
