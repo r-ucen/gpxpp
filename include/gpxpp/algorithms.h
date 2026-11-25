@@ -2,13 +2,26 @@
 #include <algorithm>
 #include <ranges>
 #include <concepts>
-#include <numeric>
 
 #include "gpxpp/types/track_point.h"
 #include "gpxpp/types/track_segment.h"
 #include "gpxpp/types/document.h"
 
 namespace gpxpp {
+    // TYPES -----------------------------------------------------------------------------------------------------------
+
+    /**
+     * Configuration parameters for elevation gain and loss calculations
+     */
+    struct ElevationOptions {
+        /// Minimum elevation change in meters required to register a climb or descent
+        double threshold { 1.0 };
+
+        /// The size of the window used by the moving average algorithm
+        /// Set to 1 or less to disable smoothing
+        int movingAverageWindowSize { 5 };
+    };
+
     // FUNCTIONS -------------------------------------------------------------------------------------------------------
 
     /**
@@ -53,6 +66,31 @@ namespace gpxpp {
      */
     inline double totalDistance(const TrackSegment& segment);
 
+    /**
+     *  Calculates the total elevation gain of all tracks in the document
+     *
+     * @param document The document containing tracks
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation gain of all tracks in the document in meters
+     */
+    inline double elevationGain(const Document& document, ElevationOptions options = {});
+    /**
+     *  Calculates the total elevation gain of all segments in the track
+     *
+     * @param track The track used to calculate the elevation gain
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation gain of all segments in the given track in meters
+     */
+    inline double elevationGain(const Track& track, ElevationOptions options = {});
+    /**
+     * Calculates the total elevation gain of all points in the given segment
+     *
+     * @param segment The segment containing points for elevation gain calculation
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation gain of the points in the segment in meters
+     */
+    inline double elevationGain(const TrackSegment& segment, ElevationOptions options = {});
+
     // CONCEPTS --------------------------------------------------------------------------------------------------------
 
     /// Requires T to be an input range and the values in that range to be of type TrackPoint
@@ -79,6 +117,21 @@ namespace gpxpp {
     template <typename T>
     concept DistanceCalculableRange = OtherThanTrackPointRange<T>
     && DistanceCalculableElementOfRange<T>;
+
+    /// Requires an element of a range to be so when passed into the elevationGain function,
+    /// the function successfully returns a double value
+    template <typename T>
+    concept ElevationGainCalculableElementOfRange = requires
+    (std::ranges::range_reference_t<T> element, ElevationOptions options) {
+        { elevationGain(element, options) } -> std::convertible_to<double>;
+    };
+
+    /// Requires T to be an input range of any values other than TrackPoint
+    /// and requires this input range elements to be so when passed into the elevationGain function,
+    /// the function successfully returns a double value
+    template <typename T>
+    concept ElevationGainCalculableRange = OtherThanTrackPointRange<T>
+    && ElevationGainCalculableElementOfRange<T>;
 
     // TEMPLATE FUNCTIONS ----------------------------------------------------------------------------------------------
 
@@ -118,6 +171,28 @@ namespace gpxpp {
      */
     template <typename T> requires TrackPointRange<T>
     auto movingAverageElevation(T&& points, int windowSize = 5);
+
+    /**
+     * Calculates the total elevation gain of the given range of TrackPoints
+     *
+     * @tparam T A range of TrackPoints to calculate elevation gain from
+     * @param points The points used in the elevation gain calculation
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation gain of the points in meters
+     */
+    template <typename T> requires TrackPointRange<T>
+    auto elevationGain(T&& points, ElevationOptions options = {});
+
+    /**
+     * Calculates the total elevation gain of the given elements
+     *
+     * @tparam T A range of elements that have an elevationGain() of their own such as TrackSegment, Track; the elements must satisfy the ElevationGainCalculableRange concept
+     * @param elements The elements to sum up their elevation gain
+     * @param options Configuration parameters controlling smoothing and elevation threshold
+     * @return The total elevation gain of the given elements in meters
+     */
+    template <typename T> requires ElevationGainCalculableRange<T>
+    double elevationGain(T&& elements, ElevationOptions options = {});
 
     // DEFINITIONS -----------------------------------------------------------------------------------------------------
 
@@ -200,5 +275,69 @@ namespace gpxpp {
                 smoothedPointByElevation.elevation = sum / static_cast<double>(windowSize);
                 return smoothedPointByElevation;
             });
+    }
+
+    template<typename T> requires TrackPointRange<T>
+    auto elevationGain(T&& points, const ElevationOptions options) {
+        auto validPoints = std::forward<T>(points)
+            | std::views::filter([](const TrackPoint& point) { return point.elevation.has_value(); });
+
+        auto calculateElevationGain = [threshold = options.threshold](auto&& range) {
+            auto it { std::ranges::begin(range) };
+            auto end { std::ranges::end(range) };
+
+            if (it == end) { return 0.0; }
+
+            double totalGain { 0.0 };
+            double anchor { (*it).elevation.value() };
+            ++it;
+
+            for (; it != end; ++it) {
+                const double currentElevation { (*it).elevation.value() };
+                const auto difference { currentElevation - anchor };
+
+                if (difference >= threshold) {
+                    anchor = currentElevation;
+                    totalGain += difference;
+                } else if (difference <= -threshold) {
+                    anchor = currentElevation;
+                }
+            }
+
+            return totalGain;
+        };
+
+        if (options.movingAverageWindowSize <= 1) { return calculateElevationGain(validPoints); }
+
+        auto it { std::ranges::begin(validPoints) };
+        const auto end { std::ranges::end(validPoints) };
+        int count { 0 };
+        while (it != end && count < options.movingAverageWindowSize) {
+            ++count;
+            ++it;
+        }
+        if (count < options.movingAverageWindowSize) { return calculateElevationGain(validPoints); }
+
+        return calculateElevationGain(movingAverageElevation(validPoints, options.movingAverageWindowSize));
+    }
+
+    inline double elevationGain(const Document& document, const ElevationOptions options) {
+        return elevationGain(document.tracks, options);
+    }
+    inline double elevationGain(const Track& track, const ElevationOptions options) {
+        return elevationGain(track.segments, options);
+    }
+    inline double elevationGain(const TrackSegment& segment, const ElevationOptions options) {
+        return elevationGain(segment.points, options);
+    }
+
+    template <typename T> requires ElevationGainCalculableRange<T>
+    double elevationGain(T&& elements, const ElevationOptions options) {
+        double result { 0.0 };
+        for (const auto& element : elements) {
+            result += elevationGain(element, options);
+        }
+
+        return result;
     }
 }
