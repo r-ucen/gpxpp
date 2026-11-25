@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.3)
 project(gpxpp)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 # pugixml - XML parsing lib
 include(FetchContent)
@@ -18,6 +18,7 @@ FetchContent_MakeAvailable(pugixml)
 # Create gpxpp library target and an alias for it in the gpxpp::gpxpp format
 add_library(gpxpp
         src/parser.cpp
+        src/algorithms.cpp
 )
 
 add_library(gpxpp::gpxpp ALIAS gpxpp)

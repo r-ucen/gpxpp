@@ -6,3 +6,4 @@
 #include "gpxpp/types/track_point.h"
 #include "gpxpp/types/track_segment.h"
 #include "gpxpp/types/coordinates.h"
+#include "gpxpp/algorithms.h"
