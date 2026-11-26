@@ -313,8 +313,8 @@ namespace gpxpp {
 
     template <typename T> requires TrackPointRange<T>
     auto movingAverageElevation(T&& points, int windowSize) {
-        // When when returning some kind of a view, std::forward needs to be called on the points,
-        // it is important when calling the movingAverage function with an rvalue
+        // When returning some kind of a view, std::forward needs to be called on the points,
+        // this is important when calling the movingAverage function with an rvalue
 
         // points itself is an lvalue
         // the && in T&& points is a forwarding reference in a function template, it binds to both lvalues and rvalues
