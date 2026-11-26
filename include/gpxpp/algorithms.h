@@ -313,8 +313,8 @@ namespace gpxpp {
 
     template <typename T> requires TrackPointRange<T>
     auto movingAverageElevation(T&& points, int windowSize) {
-        // When when returning some kind of a view, std::forward needs to be called on the points,
-        // it is important when calling the movingAverage function with an rvalue
+        // When returning some kind of a view, std::forward needs to be called on the points,
+        // this is important when calling the movingAverage function with an rvalue
 
         // points itself is an lvalue
         // the && in T&& points is a forwarding reference in a function template, it binds to both lvalues and rvalues
@@ -323,10 +323,16 @@ namespace gpxpp {
         // U& + && collapses to U&
         // U + && stays U&&
 
-        // if caller passes lvalue of U, T is deduced as U&, collapsing makes it U&, type of points is U&
-        // if caller passes rvalue of U, T is deduced as U, collapsing makes it stay U&&, type of points is U&&
+        // std::forward just casts points via the above two rules using reference collapsing
+        // (std::forward<T>(x) == static_cast<T&&>(x))
 
-        // std::forward just casts points via the above two rules using reference collapsing (std::forward<T>(x) == static_cast<T&&>(x))
+
+        // if caller passes lvalue of U, T is deduced as U&, std::forward makes it U& (static_cast<U& &&>(points)
+        // which collapses from U& && to U&), and that is lvalue reference keeping it lvalue
+
+        // if caller passes rvalue of U, T is deduced as U, std::forward makes it U&& (static_cast<U&&>(points),
+        // which is rvalue reference making it rvalue again
+
 
         // Lets say we call movingAverage like this:
         // auto result = movingAverage(getData());
@@ -336,9 +342,13 @@ namespace gpxpp {
         // owning_view is a view that has unique ownership of a range. It is move-only and stores that range within it.
         // ref_view is a view of the elements of some other range. It wraps a reference to that range.
 
-        // With std::forward, the temporary vector gets moved into an owning_view inside the returned pipeline
-        // without std::forward, we are working with a ref_view pointing at the temporary vector, the temporary dies
-        // at the end of auto result = movingAverage(getData()); and we get a dangling result
+
+        // With std::forward, points itself is an lvalue, std::forward casts it back to its original type which in
+        // this case is rvalue and the temporary vector gets moved into an owning_view inside the returned pipeline
+
+        // without std::forward, points itself is an lvalue, so the ranges lib sees it as lvalue and creates a ref_view
+        // pointing at the temporary vector, the temporary dies at the end of auto result = movingAverage(getData());
+        // and we get a dangling result
 
         return std::forward<T>(points)
             | std::views::filter([](const auto& point){ return point.elevation.has_value(); })
